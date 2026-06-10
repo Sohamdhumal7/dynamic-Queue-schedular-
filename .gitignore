@@ -16,6 +16,9 @@ dist/
 *.dylib
 *.log
 
+# Vcpkg folder
+vcpkg/
+
 # Vcpkg build artifacts and downloads
 vcpkg/installed/
 vcpkg/buildtrees/
@@ -38,3 +41,4 @@ yarn-error.log*
 # User-specific files
 *.swp
 *.swo
+analysis/__pycache__/
