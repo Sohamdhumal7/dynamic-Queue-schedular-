@@ -1,0 +1,40 @@
+# Node modules
+ui/node_modules/
+
+# Logs and runtime data
+logs/
+metrics/runs/
+
+# Build artifacts
+build/
+dist/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.log
+
+# Vcpkg build artifacts and downloads
+vcpkg/installed/
+vcpkg/buildtrees/
+vcpkg/downloads/
+vcpkg/packages/
+vcpkg/archives/
+
+# Editor and OS files
+.vscode/
+.sixth/
+*.DS_Store
+Thumbs.db
+
+# npm artifacts
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# User-specific files
+*.swp
+*.swo

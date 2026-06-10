@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scheduler Dashboard — Distributed Transaction System</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & Base ───────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #0B0F19;
+  --surface:  #111827;
+  --card:     #1A2235;
+  --border:   #1F2D45;
+  --border2:  #2A3A55;
+  --text:     #E2E8F0;
+  --muted:    #64748B;
+  --dim:      #94A3B8;
+  --green:    #10B981;
+  --green-bg: rgba(16,185,129,0.12);
+  --blue:     #3B82F6;
+  --blue-bg:  rgba(59,130,246,0.12);
+  --yellow:   #F59E0B;
+  --yellow-bg:rgba(245,158,11,0.12);
+  --red:      #EF4444;
+  --red-bg:   rgba(239,68,68,0.12);
+  --purple:   #8B5CF6;
+  --purple-bg:rgba(139,92,246,0.12);
+  --teal:     #06B6D4;
+  --teal-bg:  rgba(6,182,212,0.12);
+  --orange:   #F97316;
+  --orange-bg:rgba(249,115,22,0.12);
+  --font: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5; }
+
+/* ── Layout ─────────────────────────────────────────── */
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 20px; height: 52px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; position: sticky; top: 0; z-index: 100;
+}
+.topbar .logo { display: flex; align-items: center; gap: 10px; }
+.topbar .logo-icon { width: 28px; height: 28px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+.topbar .logo-name { font-weight: 600; font-size: 14px; color: var(--text); letter-spacing: -0.2px; }
+.topbar .logo-sub  { font-size: 11px; color: var(--muted); }
+.topbar .spacer { flex: 1; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse-dot 2s infinite; }
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.5} }
+.status-label { font-size: 12px; color: var(--muted); }
+.conn-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+.conn-badge.connected    { background: var(--green-bg); color: var(--green); }
+.conn-badge.disconnected { background: var(--red-bg);   color: var(--red); }
+
+.main { display: grid; grid-template-columns: 260px 1fr; flex: 1; min-height: 0; }
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+  background: var(--surface); border-right: 1px solid var(--border);
+  padding: 16px 12px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.sidebar-section { display: flex; flex-direction: column; gap: 6px; }
+.sidebar-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; padding: 0 4px; margin-bottom: 2px; }
+
+.algo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.algo-btn {
+  padding: 8px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border2);
+  background: var(--card); color: var(--dim); font-size: 11px; font-weight: 600;
+  cursor: pointer; text-align: center; letter-spacing: .03em; transition: all .15s;
+}
+.algo-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.algo-btn.active { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+
+.action-btn {
+  width: 100%; padding: 9px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border2); background: var(--card);
+  color: var(--text); font-size: 12px; font-weight: 500;
+  cursor: pointer; text-align: left; transition: all .15s;
+  display: flex; align-items: center; gap: 8px;
+}
+.action-btn:hover { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); }
+.action-btn.danger:hover { border-color: var(--red); background: var(--red-bg); color: var(--red); }
+.action-btn .btn-icon { font-size: 14px; width: 18px; text-align: center; }
+
+.gen-row { display: flex; gap: 5px; align-items: center; }
+.gen-row input[type=number] {
+  flex: 1; padding: 7px 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border2); background: var(--bg);
+  color: var(--text); font-size: 12px; font-family: var(--font);
+}
+.gen-row input:focus { outline: none; border-color: var(--blue); }
+.gen-select {
+  padding: 7px 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border2); background: var(--bg);
+  color: var(--text); font-size: 12px; cursor: pointer;
+}
+.gen-select:focus { outline: none; border-color: var(--blue); }
+.btn-primary {
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: none; background: var(--blue); color: #fff;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s;
+  white-space: nowrap;
+}
+.btn-primary:hover { opacity: .85; }
+
+.worker-sidebar { display: flex; flex-direction: column; gap: 4px; }
+.worker-mini {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px;
+  border-radius: var(--radius-sm); background: var(--card); border: 1px solid var(--border);
+}
+.worker-mini .w-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.worker-mini .w-dot.alive { background: var(--green); }
+.worker-mini .w-dot.dead  { background: var(--muted); }
+.worker-mini .w-name { font-size: 11px; font-weight: 600; color: var(--dim); width: 40px; flex-shrink: 0; font-family: var(--mono); }
+.worker-mini .w-bar-track { flex: 1; height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+.worker-mini .w-bar-fill  { height: 100%; border-radius: 2px; background: var(--green); transition: width .5s ease; }
+.worker-mini .w-lat { font-size: 10px; color: var(--muted); width: 36px; text-align: right; font-family: var(--mono); }
+
+/* ── Content Area ────────────────────────────────────── */
+.content { display: flex; flex-direction: column; gap: 16px; padding: 16px; overflow-y: auto; }
+
+/* ── Stats Row ───────────────────────────────────────── */
+.stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.stat-card .s-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; }
+.stat-card .s-value { font-size: 26px; font-weight: 700; line-height: 1; font-family: var(--mono); }
+.stat-card .s-sub   { font-size: 11px; color: var(--muted); }
+.stat-card .s-trend { font-size: 11px; font-weight: 500; }
+.stat-card.accent-green { border-top: 2px solid var(--green); }
+.stat-card.accent-blue  { border-top: 2px solid var(--blue); }
+.stat-card.accent-yellow{ border-top: 2px solid var(--yellow); }
+.stat-card.accent-red   { border-top: 2px solid var(--red); }
+.stat-card.accent-purple{ border-top: 2px solid var(--purple); }
+.col-green  { color: var(--green); }
+.col-blue   { color: var(--blue); }
+.col-yellow { color: var(--yellow); }
+.col-red    { color: var(--red); }
+.col-purple { color: var(--purple); }
+
+/* ── Charts Row ──────────────────────────────────────── */
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.chart-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.chart-card .cc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.chart-card .cc-title  { font-size: 13px; font-weight: 600; color: var(--text); }
+.chart-card .cc-badge  { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+.chart-card .cc-canvas-wrap { position: relative; height: 160px; }
+
+.algo-timeline-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.timeline-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.timeline-title  { font-size: 13px; font-weight: 600; }
+.timeline-track  { height: 32px; background: var(--bg); border-radius: 6px; overflow: hidden; display: flex; position: relative; }
+.timeline-seg    { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; letter-spacing: .04em; transition: all .3s; white-space: nowrap; overflow: hidden; }
+.timeline-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.tl-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dim); }
+.tl-dot  { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+/* ── Bottom Row ──────────────────────────────────────── */
+.bottom-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* ── Transaction Feed ────────────────────────────────── */
+.feed-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.feed-header  { display: flex; align-items: center; justify-content: space-between; }
+.feed-title   { font-size: 13px; font-weight: 600; }
+.feed-list    { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.feed-list::-webkit-scrollbar { width: 4px; }
+.feed-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.feed-item {
+  display: grid; grid-template-columns: 28px 1fr 50px 50px 44px;
+  gap: 6px; align-items: center; padding: 6px 8px;
+  border-radius: var(--radius-sm); border: 1px solid transparent;
+  font-size: 11px; animation: slide-in .2s ease;
+}
+@keyframes slide-in { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+.feed-item:hover { background: var(--bg); border-color: var(--border); }
+.feed-item.buy  { border-left: 2px solid var(--green); }
+.feed-item.sell { border-left: 2px solid var(--red); }
+.fi-type  { font-size: 9px; font-weight: 700; padding: 2px 4px; border-radius: 3px; text-align: center; }
+.fi-type.buy  { background: var(--green-bg); color: var(--green); }
+.fi-type.sell { background: var(--red-bg);   color: var(--red); }
+.fi-sym   { font-weight: 600; color: var(--text); font-family: var(--mono); }
+.fi-lat   { text-align: right; font-family: var(--mono); }
+.fi-algo  { font-size: 9px; padding: 2px 5px; border-radius: 3px; text-align: center; font-weight: 600; }
+.fi-prio  { font-size: 9px; text-align: center; }
+
+/* ── Worker Grid ─────────────────────────────────────── */
+.workers-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.workers-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.workers-title   { font-size: 13px; font-weight: 600; }
+.worker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.worker-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px;
+  transition: border-color .3s;
+}
+.worker-card.alive { border-color: var(--border2); }
+.worker-card.dead  { opacity: .45; }
+.wc-top { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.wc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.wc-dot.alive { background: var(--green); }
+.wc-dot.dead  { background: var(--muted); }
+.wc-name { font-size: 12px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+.wc-status { font-size: 10px; color: var(--muted); margin-left: auto; }
+.wc-stat-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.wc-stat { display: flex; flex-direction: column; }
+.wc-stat .k { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.wc-stat .v { font-size: 13px; font-weight: 600; font-family: var(--mono); color: var(--text); }
+.wc-bar { height: 3px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+.wc-bar-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width .6s ease; }
+
+/* ── Queue Inspector ─────────────────────────────────── */
+.queue-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.queue-header { display: flex; align-items: center; justify-content: space-between; }
+.queue-title  { font-size: 13px; font-weight: 600; }
+.queue-info   { display: flex; gap: 16px; margin-bottom: 4px; }
+.qi-item { display: flex; flex-direction: column; gap: 1px; }
+.qi-label { font-size: 10px; color: var(--muted); }
+.qi-val   { font-size: 16px; font-weight: 700; font-family: var(--mono); }
+.queue-items { display: flex; flex-direction: column; gap: 3px; max-height: 190px; overflow-y: auto; }
+.queue-items::-webkit-scrollbar { width: 4px; }
+.queue-items::-webkit-scrollbar-thumb { background: var(--border2); }
+.q-item {
+  display: grid; grid-template-columns: 28px 52px 1fr 40px 32px;
+  gap: 5px; align-items: center; padding: 5px 7px;
+  background: var(--bg); border-radius: 4px; font-size: 11px;
+}
+.q-idx { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+.q-type { font-size: 9px; font-weight: 700; padding: 2px 4px; border-radius: 3px; text-align: center; }
+.q-sym { font-weight: 600; font-family: var(--mono); }
+.q-qty { text-align: right; color: var(--dim); font-family: var(--mono); }
+.q-prio { text-align: center; }
+
+/* ── Algo pill colors ────────────────────────────────── */
+.algo-pill { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; letter-spacing: .03em; }
+.ap-FCFS         { background: var(--blue-bg);   color: var(--blue); }
+.ap-PRIORITY     { background: var(--yellow-bg); color: var(--yellow); }
+.ap-ROUND_ROBIN  { background: var(--teal-bg);   color: var(--teal); }
+.ap-SJF          { background: var(--purple-bg); color: var(--purple); }
+.ap-WRR          { background: var(--orange-bg); color: var(--orange); }
+.ap-MLFQ         { background: var(--red-bg);    color: var(--red); }
+
+/* ── Toast ───────────────────────────────────────────── */
+.toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 999; }
+.toast {
+  padding: 10px 16px; border-radius: var(--radius); font-size: 12px; font-weight: 500;
+  background: var(--card); border: 1px solid var(--border2);
+  color: var(--text); animation: toast-in .2s ease; max-width: 280px;
+}
+@keyframes toast-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error   { border-left: 3px solid var(--red); }
+.toast.info    { border-left: 3px solid var(--blue); }
+
+/* ── Empty states ────────────────────────────────────── */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; color: var(--muted); font-size: 12px; }
+
+/* ── Scrollbars ──────────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-icon">&#9889;</div>
+    <div>
+      <div class="logo-name">Scheduler Dashboard</div>
+      <div class="logo-sub">Distributed Transaction System v2</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <div class="status-dot" id="live-dot"></div>
+    <span class="status-label" id="live-label">Connecting...</span>
+  </div>
+  <span class="conn-badge disconnected" id="conn-badge">Disconnected</span>
+  <span style="font-size:11px;color:var(--muted);font-family:var(--mono)" id="clock">--:--:--</span>
+</header>
+
+<div class="main">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+
+  <!-- Current Algorithm display -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">Active algorithm</div>
+    <div style="padding:12px;background:var(--bg);border-radius:var(--radius);border:1px solid var(--border);text-align:center">
+      <div id="current-algo-display" class="algo-pill ap-FCFS" style="font-size:14px;padding:6px 16px">FCFS</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px" id="algo-desc">First come, first served</div>
+    </div>
+  </div>
+
+  <!-- Force Algorithm -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">Force algorithm</div>
+    <div class="algo-grid">
+      <button class="algo-btn active" onclick="forceAlgo('FCFS')">FCFS</button>
+      <button class="algo-btn" onclick="forceAlgo('PRIORITY')">PRIORITY</button>
+      <button class="algo-btn" onclick="forceAlgo('ROUND_ROBIN')">ROUND<br>ROBIN</button>
+      <button class="algo-btn" onclick="forceAlgo('SJF')">SJF</button>
+      <button class="algo-btn" onclick="forceAlgo('WRR')">WRR</button>
+      <button class="algo-btn" onclick="forceAlgo('MLFQ')">MLFQ</button>
+    </div>
+    <button class="action-btn" onclick="setAutoMode()" style="margin-top:4px">
+      <span class="btn-icon">&#9654;</span> Let scheduler decide
+    </button>
+  </div>
+
+  <!-- Generate Transactions -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">Generate transactions</div>
+    <div class="gen-row" style="margin-bottom:5px">
+      <input type="number" id="gen-count" value="50" min="1" max="500" placeholder="Count">
+      <select class="gen-select" id="gen-priority">
+        <option value="mixed">Mixed</option>
+        <option value="high">All HIGH</option>
+        <option value="low">All NORMAL</option>
+      </select>
+    </div>
+    <button class="btn-primary" style="width:100%" onclick="generateTxns()">&#9889; Push to queue</button>
+    <button class="action-btn danger" onclick="flushQueue()" style="margin-top:4px">
+      <span class="btn-icon">&#128465;</span> Flush queue
+    </button>
+  </div>
+
+  <!-- Workers sidebar -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">Workers</div>
+    <div class="worker-sidebar" id="worker-sidebar-list">
+      <div class="empty-state">No workers detected</div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="content">
+
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="stat-card accent-yellow">
+      <div class="s-label">Queue depth</div>
+      <div class="s-value col-yellow" id="stat-queue">0</div>
+      <div class="s-sub" id="stat-queue-sub">transactions waiting</div>
+    </div>
+    <div class="stat-card accent-blue">
+      <div class="s-label">Avg latency</div>
+      <div class="s-value col-blue" id="stat-latency">0<span style="font-size:14px">ms</span></div>
+      <div class="s-sub" id="stat-latency-sub">queue wait time</div>
+    </div>
+    <div class="stat-card accent-red">
+      <div class="s-label">P95 latency</div>
+      <div class="s-value col-red" id="stat-p95">0<span style="font-size:14px">ms</span></div>
+      <div class="s-sub">95th percentile</div>
+    </div>
+    <div class="stat-card accent-green">
+      <div class="s-label">Throughput</div>
+      <div class="s-value col-green" id="stat-throughput">0<span style="font-size:14px">/s</span></div>
+      <div class="s-sub" id="stat-throughput-sub">transactions / sec</div>
+    </div>
+    <div class="stat-card accent-purple">
+      <div class="s-label">Total processed</div>
+      <div class="s-value col-purple" id="stat-total">0</div>
+      <div class="s-sub" id="stat-workers-sub">0 workers active</div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="cc-header">
+        <span class="cc-title">Latency over time</span>
+        <span class="cc-badge" id="latency-badge" style="background:var(--blue-bg);color:var(--blue)">Live</span>
+      </div>
+      <div class="cc-canvas-wrap"><canvas id="latency-chart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="cc-header">
+        <span class="cc-title">Queue depth + throughput</span>
+        <span class="cc-badge" style="background:var(--yellow-bg);color:var(--yellow)">Live</span>
+      </div>
+      <div class="cc-canvas-wrap"><canvas id="queue-chart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Algorithm Timeline -->
+  <div class="algo-timeline-card">
+    <div class="timeline-header">
+      <span style="font-size:13px;font-weight:600">Algorithm switching timeline</span>
+      <span style="font-size:11px;color:var(--muted)" id="switch-count">0 switches</span>
+    </div>
+    <div class="timeline-track" id="timeline-track">
+      <div style="width:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">Waiting for data...</div>
+    </div>
+    <div class="timeline-legend">
+      <div class="tl-item"><div class="tl-dot" style="background:var(--blue)"></div>FCFS</div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--yellow)"></div>PRIORITY</div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--teal)"></div>ROUND ROBIN</div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--purple)"></div>SJF</div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--orange)"></div>WRR</div>
+      <div class="tl-item"><div class="tl-dot" style="background:var(--red)"></div>MLFQ</div>
+    </div>
+  </div>
+
+  <!-- Bottom Row: Feed + Workers + Queue -->
+  <div class="bottom-row">
+
+    <!-- Transaction Feed -->
+    <div class="feed-card">
+      <div class="feed-header">
+        <span class="feed-title">Live transaction feed</span>
+        <span style="font-size:10px;color:var(--muted)" id="feed-count">0 shown</span>
+      </div>
+      <div style="display:grid;grid-template-columns:28px 1fr 50px 50px 44px;gap:6px;padding:4px 8px;font-size:9px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase">
+        <span></span><span>Symbol</span><span style="text-align:right">Latency</span><span style="text-align:right">Qty</span><span style="text-align:center">Prio</span>
+      </div>
+      <div class="feed-list" id="feed-list">
+        <div class="empty-state">Waiting for transactions...</div>
+      </div>
+    </div>
+
+    <!-- Worker Cards -->
+    <div class="workers-card">
+      <div class="workers-header">
+        <span class="workers-title">Worker nodes</span>
+        <span style="font-size:11px;color:var(--muted)" id="worker-count-badge">0 / 8 active</span>
+      </div>
+      <div class="worker-grid" id="worker-grid">
+        <div class="empty-state" style="grid-column:1/-1">Start workers to see stats</div>
+      </div>
+    </div>
+
+    <!-- Queue Inspector -->
+    <div class="queue-card">
+      <div class="queue-header">
+        <span class="queue-title">Queue inspector</span>
+        <button class="action-btn" style="width:auto;padding:4px 10px;font-size:11px" onclick="refreshQueue()">&#8635; Refresh</button>
+      </div>
+      <div class="queue-info">
+        <div class="qi-item">
+          <span class="qi-label">Waiting</span>
+          <span class="qi-val col-yellow" id="qi-len">0</span>
+        </div>
+        <div class="qi-item">
+          <span class="qi-label">Strategy</span>
+          <span class="qi-val col-blue" id="qi-strat">—</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Next 10 in queue:</div>
+      <div class="queue-items" id="queue-items">
+        <div class="empty-state">Queue is empty</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+</div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════
+const API  = 'http://localhost:3000';
+const WS   = 'ws://localhost:3000/ws';
+
+const ALGO_COLORS = {
+  FCFS:        '#3B82F6',
+  PRIORITY:    '#F59E0B',
+  ROUND_ROBIN: '#06B6D4',
+  SJF:         '#8B5CF6',
+  WRR:         '#F97316',
+  MLFQ:        '#EF4444',
+};
+
+const ALGO_DESC = {
+  FCFS:        'First come, first served',
+  PRIORITY:    'High-priority transactions first',
+  ROUND_ROBIN: 'Balanced across workers',
+  SJF:         'Shortest job (qty) first',
+  WRR:         'Weighted by worker load',
+  MLFQ:        'Multi-level feedback queue',
+};
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let ws         = null;
+let history    = [];
+let feedItems  = [];
+let algoLog    = [];   // [{algo, startIdx}] for timeline
+let switchCount = 0;
+let prevAlgo   = null;
+let wsRetries  = 0;
+
+// ═══════════════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════════════
+setInterval(() => {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toTimeString().slice(0,8);
+}, 1000);
+
+// ═══════════════════════════════════════════════════════
+//  CHART SETUP
+// ═══════════════════════════════════════════════════════
+const CHART_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  animation: { duration: 300 },
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: '#64748B', font: { size: 10 }, maxTicksLimit: 8 },
+         grid: { color: '#1F2D45' } },
+    y: { ticks: { color: '#64748B', font: { size: 10 } },
+         grid: { color: '#1F2D45' },
+         beginAtZero: true },
+  },
+};
+
+const latencyChart = new Chart(document.getElementById('latency-chart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Avg latency (ms)', data: [], borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59,130,246,0.08)', fill: true,
+        tension: 0.4, pointRadius: 0, borderWidth: 2 },
+      { label: 'P95 latency (ms)', data: [], borderColor: '#EF4444',
+        backgroundColor: 'transparent', tension: 0.4,
+        pointRadius: 0, borderWidth: 1.5, borderDash: [4,3] },
+    ]
+  },
+  options: { ...CHART_OPTS,
+    scales: { ...CHART_OPTS.scales,
+      y: { ...CHART_OPTS.scales.y,
+        ticks: { ...CHART_OPTS.scales.y.ticks,
+          callback: v => v + 'ms' }}}},
+});
+
+const queueChart = new Chart(document.getElementById('queue-chart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Queue length', data: [], borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245,158,11,0.08)', fill: true,
+        tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
+      { label: 'Throughput /s', data: [], borderColor: '#10B981',
+        backgroundColor: 'transparent', tension: 0.4,
+        pointRadius: 0, borderWidth: 1.5, yAxisID: 'y2' },
+    ]
+  },
+  options: { ...CHART_OPTS,
+    plugins: { legend: { display: true, position: 'top',
+      labels: { color: '#64748B', font: { size: 10 }, boxWidth: 10, padding: 12 }}},
+    scales: {
+      x: CHART_OPTS.scales.x,
+      y:  { ...CHART_OPTS.scales.y, position: 'left',
+             ticks: { ...CHART_OPTS.scales.y.ticks, callback: v => v } },
+      y2: { ...CHART_OPTS.scales.y, position: 'right', grid: { display: false },
+             ticks: { ...CHART_OPTS.scales.y.ticks, callback: v => v+'/s' } },
+    }}
+});
+
+// ═══════════════════════════════════════════════════════
+//  WEBSOCKET
+// ═══════════════════════════════════════════════════════
+function connectWS() {
+  ws = new WebSocket(WS);
+
+  ws.onopen = () => {
+    wsRetries = 0;
+    document.getElementById('conn-badge').className = 'conn-badge connected';
+    document.getElementById('conn-badge').textContent = 'Connected';
+    document.getElementById('live-dot').className = 'status-dot live';
+    document.getElementById('live-label').textContent = 'Live';
+    toast('Connected to scheduler server', 'success');
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'snapshot') handleSnapshot(msg.data);
+    if (msg.type === 'history')  handleHistory(msg.data);
+  };
+
+  ws.onclose = () => {
+    document.getElementById('conn-badge').className = 'conn-badge disconnected';
+    document.getElementById('conn-badge').textContent = 'Disconnected';
+    document.getElementById('live-dot').className = 'status-dot';
+    document.getElementById('live-label').textContent = 'Reconnecting...';
+    wsRetries++;
+    const delay = Math.min(1000 * wsRetries, 8000);
+    setTimeout(connectWS, delay);
+  };
+
+  ws.onerror = () => {};
+}
+
+// ═══════════════════════════════════════════════════════
+//  DATA HANDLERS
+// ═══════════════════════════════════════════════════════
+function handleHistory(snaps) {
+  history = snaps;
+  rebuildCharts();
+}
+
+function handleSnapshot(snap) {
+  history.push(snap);
+  if (history.length > 120) history.shift();
+  updateStats(snap);
+  updateCharts(snap);
+  updateWorkers(snap.workers);
+  updateAlgoTimeline(snap.strategy);
+  updateLatencySamples(snap.latencySamples);
+  refreshQueueDisplay();
+}
+
+function updateStats(s) {
+  document.getElementById('stat-queue').innerHTML =
+    s.queueLen + '<span style="font-size:14px"></span>';
+  const qSub = s.queueLen > 150 ? '&#9888; HIGH LOAD' :
+               s.queueLen > 50  ? 'Moderate load' : 'transactions waiting';
+  document.getElementById('stat-queue-sub').innerHTML = qSub;
+
+  document.getElementById('stat-latency').innerHTML =
+    s.avgLatency + '<span style="font-size:14px">ms</span>';
+  document.getElementById('stat-p95').innerHTML =
+    s.p95Latency + '<span style="font-size:14px">ms</span>';
+  document.getElementById('stat-throughput').innerHTML =
+    s.throughput + '<span style="font-size:14px">/s</span>';
+  document.getElementById('stat-total').textContent =
+    s.totalProcessed.toLocaleString();
+  document.getElementById('stat-workers-sub').textContent =
+    s.activeWorkers + ' workers active';
+
+  const algoEl = document.getElementById('current-algo-display');
+  algoEl.textContent = s.strategy;
+  algoEl.className = 'algo-pill ap-' + s.strategy;
+  document.getElementById('algo-desc').textContent =
+    ALGO_DESC[s.strategy] || s.strategy;
+
+  // Highlight active algo button
+  document.querySelectorAll('.algo-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.replace(/\s+/g,'') === s.strategy.replace(/\s+/g,'') ||
+      (b.textContent.includes('ROUND') && s.strategy === 'ROUND_ROBIN'));
+  });
+
+  // Update queue inspector header
+  document.getElementById('qi-len').textContent   = s.queueLen;
+  document.getElementById('qi-strat').textContent = s.strategy;
+}
+
+function updateCharts(s) {
+  const label = new Date(s.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const MAX_POINTS = 60;
+
+  const addPoint = (chart, label, ...values) => {
+    chart.data.labels.push(label);
+    values.forEach((v, i) => chart.data.datasets[i].data.push(v));
+    if (chart.data.labels.length > MAX_POINTS) {
+      chart.data.labels.shift();
+      chart.data.datasets.forEach(d => d.data.shift());
+    }
+    chart.update('none');
+  };
+
+  addPoint(latencyChart, label, s.avgLatency, s.p95Latency);
+  addPoint(queueChart,   label, s.queueLen,   s.throughput);
+}
+
+function rebuildCharts() {
+  const MAX_POINTS = 60;
+  const slice = history.slice(-MAX_POINTS);
+
+  latencyChart.data.labels   = [];
+  queueChart.data.labels     = [];
+  latencyChart.data.datasets.forEach(d => d.data = []);
+  queueChart.data.datasets.forEach(d => d.data = []);
+
+  for (const s of slice) {
+    const label = new Date(s.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    latencyChart.data.labels.push(label);
+    queueChart.data.labels.push(label);
+    latencyChart.data.datasets[0].data.push(s.avgLatency);
+    latencyChart.data.datasets[1].data.push(s.p95Latency);
+    queueChart.data.datasets[0].data.push(s.queueLen);
+    queueChart.data.datasets[1].data.push(s.throughput);
+  }
+  latencyChart.update('none');
+  queueChart.update('none');
+}
+
+function updateAlgoTimeline(algo) {
+  if (algo === prevAlgo) return;
+  if (prevAlgo !== null) switchCount++;
+  prevAlgo = algo;
+  algoLog.push({ algo, startIdx: history.length });
+  if (algoLog.length > 30) algoLog.shift();
+
+  document.getElementById('switch-count').textContent = switchCount + ' switches';
+
+  const track = document.getElementById('timeline-track');
+  if (algoLog.length === 0) return;
+
+  const total = algoLog.reduce((s,_,i) => s + (i < algoLog.length-1 ? 1 : 1), 0);
+  track.innerHTML = algoLog.map((item, i) => {
+    const pct = Math.max(2, 100 / algoLog.length);
+    const col = ALGO_COLORS[item.algo] || '#64748B';
+    const short = item.algo === 'ROUND_ROBIN' ? 'RR' : item.algo;
+    return `<div class="timeline-seg" style="width:${pct}%;background:${col}22;color:${col};border-right:1px solid ${col}44">${pct > 6 ? short : ''}</div>`;
+  }).join('');
+}
+
+function updateLatencySamples(samples) {
+  if (!samples || samples.length === 0) return;
+  // Add to feed
+  for (const s of samples.slice(0,3)) {
+    feedItems.unshift({
+      type:    s.workerId % 2 === 0 ? 'SELL' : 'BUY',
+      symbol:  ['AAPL','GOOGL','MSFT','TSLA','AMZN','NVDA','META'][s.workerId % 7],
+      latency: s.latencyMs,
+      qty:     Math.floor(Math.random() * 300) + 10,
+      algo:    prevAlgo || 'FCFS',
+      hi:      s.latencyMs < 50,
+    });
+  }
+  if (feedItems.length > 40) feedItems = feedItems.slice(0, 40);
+
+  const list = document.getElementById('feed-list');
+  document.getElementById('feed-count').textContent = feedItems.length + ' shown';
+  list.innerHTML = feedItems.slice(0,20).map(item => {
+    const latCol = item.latency < 20 ? 'var(--green)' : item.latency < 200 ? 'var(--blue)' : 'var(--red)';
+    return `<div class="feed-item ${item.type.toLowerCase()}">
+      <span class="fi-type ${item.type.toLowerCase()}">${item.type}</span>
+      <span class="fi-sym">${item.symbol}</span>
+      <span class="fi-lat" style="color:${latCol}">${item.latency}ms</span>
+      <span style="text-align:right;font-family:var(--mono);font-size:11px;color:var(--dim)">${item.qty}</span>
+      <span class="fi-prio">${item.hi ? '<span style="color:var(--yellow);font-size:10px;font-weight:700">HI</span>' : '<span style="color:var(--muted);font-size:9px">—</span>'}</span>
+    </div>`;
+  }).join('') || '<div class="empty-state">Waiting for transactions...</div>';
+}
+
+function updateWorkers(workers) {
+  const count = workers ? workers.length : 0;
+  document.getElementById('worker-count-badge').textContent = count + ' / 8 active';
+
+  if (!workers || workers.length === 0) {
+    document.getElementById('worker-grid').innerHTML =
+      '<div class="empty-state" style="grid-column:1/-1">Start workers to see stats</div>';
+    document.getElementById('worker-sidebar-list').innerHTML =
+      '<div class="empty-state">No workers detected</div>';
+    return;
+  }
+
+  const maxProc  = Math.max(...workers.map(w => w.processed), 1);
+  const maxLat   = Math.max(...workers.map(w => w.avgLatency), 1);
+
+  // Worker grid
+  document.getElementById('worker-grid').innerHTML = workers.map(w => {
+    const loadPct = Math.round(Math.min(100, w.avgLatency / maxLat * 100));
+    const barCol  = loadPct > 70 ? 'var(--red)' : loadPct > 40 ? 'var(--yellow)' : 'var(--green)';
+    const ago     = w.lastActive ? Math.round((Date.now() - w.lastActive) / 1000) : '?';
+    return `<div class="worker-card ${w.alive ? 'alive' : 'dead'}">
+      <div class="wc-top">
+        <div class="wc-dot ${w.alive ? 'alive' : 'dead'}"></div>
+        <div class="wc-name">W${w.id}</div>
+        <div class="wc-status">${w.alive ? ago + 's ago' : 'offline'}</div>
+      </div>
+      <div class="wc-stat-row">
+        <div class="wc-stat"><span class="k">Processed</span><span class="v">${w.processed.toLocaleString()}</span></div>
+        <div class="wc-stat"><span class="k">Avg lat</span><span class="v" style="color:${barCol}">${w.avgLatency}ms</span></div>
+      </div>
+      <div class="wc-bar"><div class="wc-bar-fill" style="width:${loadPct}%;background:${barCol}"></div></div>
+    </div>`;
+  }).join('');
+
+  // Worker sidebar mini bars
+  document.getElementById('worker-sidebar-list').innerHTML = workers.map(w => {
+    const pct    = Math.round(w.processed / maxProc * 100);
+    const barCol = w.avgLatency > 100 ? 'var(--red)' : w.avgLatency > 30 ? 'var(--yellow)' : 'var(--green)';
+    return `<div class="worker-mini">
+      <div class="w-dot ${w.alive ? 'alive' : 'dead'}"></div>
+      <div class="w-name">W${w.id}</div>
+      <div class="w-bar-track"><div class="w-bar-fill" style="width:${pct}%;background:${barCol}"></div></div>
+      <div class="w-lat">${w.avgLatency}ms</div>
+    </div>`;
+  }).join('');
+}
+
+async function refreshQueueDisplay() {
+  try {
+    const r = await fetch(API + '/api/queue/peek');
+    const d = await r.json();
+    const container = document.getElementById('queue-items');
+    if (!d.items || d.items.length === 0) {
+      container.innerHTML = '<div class="empty-state">Queue is empty</div>';
+      return;
+    }
+    container.innerHTML = d.items.map((item, i) => {
+      if (item.raw) return `<div class="q-item"><span class="q-idx">${i+1}</span><span style="color:var(--muted);grid-column:2/-1;font-size:10px">Parse error</span></div>`;
+      const typeCol = item.type === 'BUY' ? 'var(--green-bg)' : 'var(--red-bg)';
+      const typeTxt = item.type === 'BUY' ? 'var(--green)'    : 'var(--red)';
+      return `<div class="q-item">
+        <span class="q-idx">${i+1}</span>
+        <span class="q-type" style="background:${typeCol};color:${typeTxt}">${item.type}</span>
+        <span class="q-sym">${item.symbol}</span>
+        <span class="q-qty">${item.quantity}</span>
+        <span class="q-prio">${item.priority ? '<span style="color:var(--yellow);font-size:9px;font-weight:700">HI</span>' : '<span style="color:var(--muted);font-size:9px">—</span>'}</span>
+      </div>`;
+    }).join('');
+  } catch (_) {}
+}
+setInterval(refreshQueueDisplay, 3000);
+
+// ═══════════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════════
+async function forceAlgo(algo) {
+  try {
+    const r = await fetch(API + '/api/control/algo', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ algorithm: algo })
+    });
+    const d = await r.json();
+    if (d.forced) toast(`Algorithm forced: ${algo}`, 'success');
+    else toast('Failed to set algorithm', 'error');
+  } catch (e) { toast('Server unreachable', 'error'); }
+}
+
+async function setAutoMode() {
+  try {
+    const r = await fetch(API + '/api/control/auto', { method: 'POST' });
+    const d = await r.json();
+    if (d.auto) toast('Scheduler is now in adaptive mode', 'info');
+    else toast('Failed to enable adaptive mode', 'error');
+  } catch (e) { toast('Server unreachable', 'error'); }
+}
+
+async function generateTxns() {
+  const count    = parseInt(document.getElementById('gen-count').value) || 50;
+  const priority = document.getElementById('gen-priority').value;
+  try {
+    const r = await fetch(API + '/api/workers/generate', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ count, priority })
+    });
+    const d = await r.json();
+    toast(`Pushed ${d.generated} transactions`, 'success');
+  } catch (e) { toast('Failed to generate transactions', 'error'); }
+}
+
+async function flushQueue() {
+  if (!confirm('Clear all items from the queue?')) return;
+  try {
+    const r = await fetch(API + '/api/control/flush', { method: 'POST' });
+    const d = await r.json();
+    toast(`Flushed ${d.itemsCleared} items from queue`, 'info');
+  } catch (e) { toast('Failed to flush queue', 'error'); }
+}
+
+async function refreshQueue() { await refreshQueueDisplay(); }
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s';
+    setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  connectWS();
+  // Fallback REST polling if WS not yet connected
+  setTimeout(async () => {
+    try {
+      const r = await fetch(API + '/api/status');
+      const d = await r.json();
+      handleSnapshot(d);
+    } catch (_) {}
+  }, 500);
+});
+</script>
+</body>
+</html>
