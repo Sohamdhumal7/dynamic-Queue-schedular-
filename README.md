@@ -220,6 +220,20 @@ Watch the dashboard while k6 runs — you'll see:
 
 ---
 
+## Removing comments from a file on GitHub
+
+To remove comments from a file directly on GitHub, follow these steps:
+
+1. Open the repository on GitHub.
+2. Navigate to the file you want to edit, for example `.gitignore`.
+3. Click the pencil icon to enter edit mode.
+4. Delete every line that begins with `#`.
+5. Commit the change with a descriptive message like `Remove comments from .gitignore`.
+
+This keeps the file clean and preserves only the actual patterns that Git should ignore.
+
+---
+
 ## The 6 Scheduling Algorithms
 
 The adaptive scheduler switches between these automatically based on queue depth, latency, and worker load:
